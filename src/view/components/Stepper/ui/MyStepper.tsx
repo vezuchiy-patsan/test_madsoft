@@ -10,10 +10,11 @@ import {
     Stepper, TextField,
     Typography
 } from "@mui/material";
-import {ReactNode, useCallback, useState} from "react";
+import {ReactNode, useEffect, useState} from "react";
 import {FormProvider, useForm, useFormContext} from "react-hook-form";
+import {localStorageClear, localStorageGet, localStorageSet} from "../../../../helpers/localStorage";
 
-enum typeAnswer{
+enum typeAnswer {
     checkbox = "checkbox",
     radio = "radio",
     text = "text"
@@ -25,16 +26,9 @@ interface questionSteps {
     variants: Array<string>
 }
 
-
-const steps: questionSteps[] = [
-    {name: 'Как правильно мы называем файл который создаем самым первым?', type: typeAnswer.radio,
-        variants: ["index.html", "JavaScript.js", "style.css"]},
-    {name:'Выберите неправильный ответ.', type: typeAnswer.checkbox,
-        variants: ["строчный тэг как и блочный неможет размещать ряом другие тэги",
-                "строчным тэгам можно дать ширину и высоту",
-                "фотография обладает строчно-блочным свойством"]},
-    {name:'Какое свойство отвечает за превращения из блочного тэга в строчный?', type: typeAnswer.text, variants: []}
-];
+interface IStepperProps {
+    isTimeOut: boolean
+}
 
 type switchInputProps = {
     type: string,
@@ -43,47 +37,47 @@ type switchInputProps = {
 }
 
 type formInput = {
-    "radio.0": string,
-    "check.0": string
+    [key: string]: string | Array<string> | null,
 }
 
-function SwitchInput({type, variants, activeStep} : switchInputProps){
+function SwitchInput({type, variants, activeStep}: switchInputProps) {
     const {register} = useFormContext();
 
-    switch (type){
+    switch (type) {
         case typeAnswer.checkbox:
             return (
-                <FormGroup>
+                <FormGroup sx={{alignContent: "center"}}>
                     {variants.map((variant, index): ReactNode => (
                         <FormControlLabel
                             value={variant}
                             control={<Checkbox key={index} {...register(`check-${activeStep}`)} />}
-                            label={variant} />
+                            label={variant}/>
                     ))}
                 </FormGroup>
             )
 
         case typeAnswer.radio:
             return (
-                <RadioGroup name="radio-buttons">
+                <RadioGroup name="radio-buttons" sx={{alignContent: "center"}}>
                     {variants.map((variant, index): ReactNode => (
                         <FormControlLabel
                             value={variant}
                             key={index}
                             control={<Radio {...register(`radio-${activeStep}`)} />}
-                            label={variant} />
+                            label={variant}/>
                     ))}
                 </RadioGroup>
             );
         case typeAnswer.text:
-            return(
+            return (
                 <>
                     <TextField
                         id={activeStep.toString()}
-                        label="Введите текст"
+                        label="Введите ответ..."
                         multiline
                         rows={4}
                         defaultValue=""
+                        fullWidth
                         {...register(`text-${activeStep}`)}
                     />
                 </>
@@ -96,22 +90,33 @@ function SwitchInput({type, variants, activeStep} : switchInputProps){
 }
 
 
-
-export function MyStepper() {
+export function MyStepper({isTimeOut}: IStepperProps) {
     const [activeStep, setActiveStep] = useState<number>(0);
     const [completed, setCompleted] = useState<{ [k: number]: boolean; }>({});
     const methods = useForm<formInput>();
-    const {
-        register,
-        formState:{
-            errors
-        },
-        control,
-        handleSubmit,
 
-        trigger}
+    const steps: questionSteps[] = [
+        {
+            name: 'Как правильно мы называем файл который создаем самым первым?', type: typeAnswer.radio,
+            variants: ["index.html", "JavaScript.js", "style.css"]
+        },
+        {
+            name: 'Выберите неправильный ответ.', type: typeAnswer.checkbox,
+            variants: ["строчный тэг как и блочный неможет размещать ряом другие тэги",
+                "строчным тэгам можно дать ширину и высоту",
+                "фотография обладает строчно-блочным свойством"]
+        },
+        {
+            name: 'Какое свойство отвечает за превращения из блочного тэга в строчный?',
+            type: typeAnswer.text,
+            variants: []
+        }
+    ];
+
+    const {
+        handleSubmit
+    }
         = methods
-    console.log(methods)
 
     const totalSteps = () => {
         return steps.length;
@@ -139,18 +144,13 @@ export function MyStepper() {
                 : activeStep + 1;
         setActiveStep(newActiveStep);
     };
-    // шаг назад
-    const handleBack = () => {
-        setActiveStep((prevActiveStep) => prevActiveStep - 1);
-    };
-
-    const handleStep = (step: number) => () => {
-        setActiveStep(step);
-    };
 
     const handleComplete = () => {
-        let isValid = false;
-        console.log("F1", methods.getValues());
+        if (!isLastStep()) {
+            localStorageSet("form", methods.getValues());
+        } else {
+            localStorageClear("form");
+        }
         setCompleted({
             ...completed,
             [activeStep]: true,
@@ -158,68 +158,93 @@ export function MyStepper() {
         handleNext();
     };
 
-    const handleReset = () => {
-        setActiveStep(0);
-        setCompleted({});
-    };
+    useEffect(() => {
+        if (localStorageGet("form")) {
+            const form = localStorageGet("form");
+            if (form) {
+                console.log(methods.getFieldState("radio-0"));
+                Object.keys(JSON.parse(form)).map((el, index) => {
+                        if (methods.getFieldState(el)) {
+                            methods.setValue(el, JSON.parse(form)[el])
+                            handleComplete()
+                        }
+                    }
+                );
+            }
 
-    // const switchInputCallback = useCallback((steps: questionSteps[]): ReactNode => {
-    //     return switchInput(steps[activeStep].type, steps[activeStep].variants, activeStep);
-    // }, [activeStep]);
+            return;
+        }
+    }, [])
 
     const onSubmit = (data: formInput) => console.log(data)
 
-    // @ts-ignore
     return (
         <FormProvider {...methods} >
-        <Box sx={{width: '100%'}}>
-            <Stepper activeStep={activeStep} alternativeLabel>
-                {steps.map(({name: label}, index) => (
-                    <Step key={label} completed={completed[index]}>
-                        <StepLabel>{label}</StepLabel>
-                    </Step>
-                ))}
-            </Stepper>
+            <Box sx={{width: '100%'}}>
+                <Stepper activeStep={activeStep} alternativeLabel sx={{mb: 3}}>
+                    {steps.map(({name: label}, index) => (
+                        <Step key={label} completed={completed[index]}>
+                            <StepLabel>{label}</StepLabel>
+                        </Step>
+                    ))}
+                </Stepper>
                 <form onSubmit={handleSubmit(onSubmit)}>
+                    <div style={{justifyContent: "center", textAlign: "center"}}>
                         {allStepsCompleted() ? (
                             <>
-                                <Typography sx={{mt: 2, mb: 1}}>
+                                <Typography sx={{mt: 2, mb: 1}} textAlign="center">
                                     Тест пройден. Ожидайте результатов.
                                 </Typography>
-                                <Box sx={{display: 'flex', flexDirection: 'row', pt: 2}}>
-                                    <Button onClick={handleReset}>Reset</Button>
-                                </Box>
                             </>
                         ) : (
-                            <>
-                                {(totalSteps() > 0 &&
-                                    (
-                                        <SwitchInput
-                                            type={steps[activeStep].type}
-                                            variants={steps[activeStep].variants}
-                                            activeStep={activeStep}/>
-                                    )
-                                )}
-                                <Box sx={{display: 'flex', flexDirection: 'row', pt: 2}}>
-                                    {activeStep !== steps.length &&
-                                        (completed[activeStep] ? (
-                                            <Typography variant="caption" sx={{display: 'inline-block'}}>
-                                                Step {activeStep + 1} already completed
-                                            </Typography>
-                                        ) : (completedSteps() !== totalSteps() &&
-                                            <Button onClick={handleComplete}>
-                                                Ответить
-                                            </Button>
-                                        ))}
-                                </Box>
-                            </>
+
+                            totalSteps() > 0 && !isTimeOut && (
+                                <SwitchInput
+                                    type={steps[activeStep].type}
+                                    variants={steps[activeStep].variants}
+                                    activeStep={activeStep}
+                                />
+                            )
                         )}
+
+                        <Box sx={{display: 'flex', flexDirection: 'row', pt: 2}}>
+                            {activeStep !== steps.length && (
+                                completed[activeStep] && isLastStep() ? (
+                                    <Box>
+                                        <Typography variant="h5" sx={{display: 'inline-block'}}>
+                                            Ваши ответы:
+                                        </Typography>
+                                        <>
+                                            {Object.keys(methods.getValues()).map((el, index) => (
+                                                <Box component="div" key={el} pb={2}>
+                                                    {steps[index].name + " : " + (typeof methods.getValues()[el] !== "string" ? "Ответ не дан" : methods.getValues()[el])}
+                                                </Box>
+                                            ))}
+                                        </>
+                                    </Box>
+                                ) : isTimeOut ? (
+                                    <>
+                                        <Typography sx={{mt: 2, mb: 1}} textAlign="center">
+                                            Тест не пройден
+                                        </Typography>
+                                    </>
+                                ) : (
+                                    completedSteps() !== totalSteps() && (
+                                        <Button onClick={handleComplete}>
+                                            Ответить
+                                        </Button>
+                                    )
+                                )
+                            )}
+                        </Box>
+                    </div>
+
 
                 </form>
 
-</Box>
+            </Box>
         </FormProvider>
 
-)
-    ;
+    )
+        ;
 }
