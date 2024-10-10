@@ -1,7 +1,7 @@
 import {
     Box,
     Button,
-    Checkbox, FormControl,
+    Checkbox,
     FormControlLabel,
     FormGroup, Radio,
     RadioGroup,
@@ -162,8 +162,7 @@ export function MyStepper({isTimeOut}: IStepperProps) {
         if (localStorageGet("form")) {
             const form = localStorageGet("form");
             if (form) {
-                console.log(methods.getFieldState("radio-0"));
-                Object.keys(JSON.parse(form)).map((el, index) => {
+                Object.keys(JSON.parse(form)).map((el) => {
                         if (methods.getFieldState(el)) {
                             methods.setValue(el, JSON.parse(form)[el])
                             handleComplete()
